@@ -15,11 +15,25 @@ class Project
       end
     end
 
+    def shared_lookup_file
+      Pathname("#{dataroot}/.shared_lookup").tap do |path|
+        FileUtils.touch(path.to_s) unless path.exist?
+      end
+    end
+
     def lookup_table
       f = File.read(lookup_file)
       YAML.safe_load(f).to_h
     rescue StandardError, Exception => e
       Rails.logger.warn("cannot read #{dataroot}/.project_lookup due to error #{e}")
+      {}
+    end
+
+    def shared_lookup_table
+      f = File.read(shared_lookup_file)
+      YAML.safe_load(f).to_h
+    rescue StandardError, Exception => e
+      Rails.logger.warn("cannot read #{dataroot}/.shared_lookup due to error #{e}")
       {}
     end
 
@@ -29,6 +43,9 @@ class Project
 
     def all
       lookup_table.map do |id, directory|
+        Project.new({ id: id, directory: directory })
+      end
+      shared_lookup_table.map do |id, directory|
         Project.new({ id: id, directory: directory })
       end
     end
@@ -68,7 +85,7 @@ class Project
     end
   end
 
-  attr_reader :id, :name, :description, :icon, :directory, :template
+  attr_reader :id, :name, :description, :icon, :directory, :template, :shared
 
   validates :name, presence: { message: :required }, on: [:create, :update]
   validates :id, :directory, :icon, presence: { message: :required }, on: [:update]
@@ -85,6 +102,7 @@ class Project
     @directory = attributes[:directory]
     @directory = File.expand_path(@directory) unless @directory.blank?
     @template = attributes[:template]
+    @shared = attributes[:shared]
 
     return if new_record?
 
@@ -97,6 +115,7 @@ class Project
     {
       :id => id,
       :name => name,
+      :shared => shared,
       :description => description,
       :icon => icon,
     }
@@ -114,6 +133,7 @@ class Project
 
     # SET DEFAULTS
     @id = Project.next_id if id.blank?
+    @shared = false
     @directory = Project.dataroot.join(id.to_s).to_s if directory.blank?
     @icon = 'fas://cog' if icon.blank?
 
@@ -129,7 +149,7 @@ class Project
   end
 
   def store_manifest(operation)
-    save_manifest(operation) && add_to_lookup(operation)
+    save_manifest(operation) && add_to_lookup(operation) && (shared ? add_to_shared_lookup(operation) : true)
   end
 
   def save_manifest(operation)
@@ -151,6 +171,15 @@ class Project
     false
   end
 
+  def add_to_shared_lookup(operation)
+    new_table = Project.shared_lookup_table.merge(Hash[id, directory.to_s])
+    File.write(Project.shared_lookup_file, new_table.to_yaml)
+    true
+  rescue StandardError => e
+    errors.add(operation, "Cannot update shared lookup file with error #{e.class}:#{e.message}")
+    false
+  end
+
   def remove_from_lookup
     new_table = Project.lookup_table.except(id)
     File.write(Project.lookup_file, new_table.to_yaml)
@@ -160,13 +189,22 @@ class Project
     false
   end
 
+  def remove_from_shared_lookup
+    new_table = Project.shared_lookup_table.except(id)
+    File.write(Project.shared_lookup_file, new_table.to_yaml)
+    true
+  rescue StandardError => e
+    errors.add(:update, "Cannot update shared lookup file with error #{e.class}:#{e.message}")
+    false
+  end
+
   def icon_class
     # rails will prepopulate the tag with fa- so just the name is needed
     icon.sub('fas://', '')
   end
 
   def destroy!
-    remove_from_lookup
+    remove_from_lookup && (shared ? add_to_shared_lookup(operation) : true)
     FileUtils.remove_dir(configuration_directory, true)
   end
 
@@ -239,7 +277,7 @@ class Project
   private
 
   def update_attrs(attributes)
-    [:name, :description, :icon].each do |attribute|
+    [:name, :shared, :description, :icon].each do |attribute|
       instance_variable_set("@#{attribute}".to_sym, attributes.fetch(attribute, ''))
     end
   end
