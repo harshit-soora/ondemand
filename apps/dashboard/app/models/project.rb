@@ -15,25 +15,11 @@ class Project
       end
     end
 
-    def shared_lookup_file
-      Pathname("#{dataroot}/.shared_lookup").tap do |path|
-        FileUtils.touch(path.to_s) unless path.exist?
-      end
-    end
-
     def lookup_table
       f = File.read(lookup_file)
       YAML.safe_load(f).to_h
     rescue StandardError, Exception => e
       Rails.logger.warn("cannot read #{dataroot}/.project_lookup due to error #{e}")
-      {}
-    end
-
-    def shared_lookup_table
-      f = File.read(shared_lookup_file)
-      YAML.safe_load(f).to_h
-    rescue StandardError, Exception => e
-      Rails.logger.warn("cannot read #{dataroot}/.shared_lookup due to error #{e}")
       {}
     end
 
@@ -43,9 +29,6 @@ class Project
 
     def all
       lookup_table.map do |id, directory|
-        Project.new({ id: id, directory: directory })
-      end
-      shared_lookup_table.map do |id, directory|
         Project.new({ id: id, directory: directory })
       end
     end
@@ -149,7 +132,7 @@ class Project
   end
 
   def store_manifest(operation)
-    save_manifest(operation) && add_to_lookup(operation) && (shared ? add_to_shared_lookup(operation) : true)
+    save_manifest(operation) && add_to_lookup(operation)
   end
 
   def save_manifest(operation)
@@ -171,15 +154,6 @@ class Project
     false
   end
 
-  def add_to_shared_lookup(operation)
-    new_table = Project.shared_lookup_table.merge(Hash[id, directory.to_s])
-    File.write(Project.shared_lookup_file, new_table.to_yaml)
-    true
-  rescue StandardError => e
-    errors.add(operation, "Cannot update shared lookup file with error #{e.class}:#{e.message}")
-    false
-  end
-
   def remove_from_lookup
     new_table = Project.lookup_table.except(id)
     File.write(Project.lookup_file, new_table.to_yaml)
@@ -189,22 +163,13 @@ class Project
     false
   end
 
-  def remove_from_shared_lookup
-    new_table = Project.shared_lookup_table.except(id)
-    File.write(Project.shared_lookup_file, new_table.to_yaml)
-    true
-  rescue StandardError => e
-    errors.add(:update, "Cannot update shared lookup file with error #{e.class}:#{e.message}")
-    false
-  end
-
   def icon_class
     # rails will prepopulate the tag with fa- so just the name is needed
     icon.sub('fas://', '')
   end
 
   def destroy!
-    remove_from_lookup && (shared ? add_to_shared_lookup(operation) : true)
+    remove_from_lookup
     FileUtils.remove_dir(configuration_directory, true)
   end
 
