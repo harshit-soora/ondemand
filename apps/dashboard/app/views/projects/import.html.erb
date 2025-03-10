@@ -3,8 +3,39 @@
     Import a Shared Project
   </h1>
 </div>
-# TODO: Add a new partial for this. May be similar to index with a list of cards or a simple search
-# Right now it point to "Create new Project" form
+
 <%= bootstrap_form_for(@project, url: project_import_save_path, method: :post) do |form| %>
-  <%= render partial: "form", locals: { form: form }%>
+<div class='card'>
+  <div class='card-group'>
+    <div class='card'>
+      <div class='card-body'>
+        <div class="col">
+          <div class="field">
+            <%= form.text_field(:directory, placeholder: I18n.t('dashboard.jobs_project_directory_placeholder'),
+                                required: true,
+                                help: I18n.t('dashboard.jobs_project_directory_help_html', root_directory: Project.dataroot.to_s).html_safe,
+                                data: { 'path-selector': true })%>
+
+            <button type="button" class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#<%= path_selector_id %>">
+              <%= I18n.t('dashboard.select_path') %>
+            </button>
+          </div>
+
+        <ul class="dropdown-menu <%= local_assigns.fetch(:menu_alignment, 'dropdown-menu-end') %>" role="menu">
+          <%= nav_link(t('dashboard.nav_restart_server'), "sync", restart_url) %>
+          <%= nav_link(t('dashboard.nav_develop_docs'), "book", Configuration.developer_docs_url, new_tab: true) %>
+          <%= nav_link(products_title(:dev), "cog", products_path(type: "dev")) %>
+        </ul>
+        </div>
+      </div>
+      </div>
+    </div>
+  </div>
+  <br>
+  <p>
+    <%= form.submit 'Save', class: 'btn btn-primary', title: 'Save project' %>
+    <%= form.button 'Reset', type: :reset, class: 'btn btn-default', title: 'Clear form fields' %>
+    <%= link_to 'Back', projects_path, class: 'btn btn-default', title: 'Return to projects page' %>
+  </p>
+</div>
 <% end %>
