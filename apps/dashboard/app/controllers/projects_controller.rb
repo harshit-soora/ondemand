@@ -15,7 +15,15 @@ class ProjectsController < ApplicationController
       end
     else
       @launchers = Launcher.all(@project.directory)
+<<<<<<< HEAD
+<<<<<<< HEAD
       @workflows = Workflow.all(@project.directory)
+=======
+      @workflows = Workflow.all(@project.id)
+>>>>>>> 6a70917a (Moved workflows from new page to project page)
+=======
+      @workflows = Workflow.all(@project.directory)
+>>>>>>> a42fbd89 (Cleaned the PR, remove lookup workflow.yml and no need to save project_id in <workflow-id>.yml file and few typos)
       @valid_project = Launcher.clusters?
       @valid_scripts = Launcher.scripts?(@project.directory)
 

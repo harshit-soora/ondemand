@@ -1,6 +1,48 @@
 <%# TODO Add support to describe relationship among launchers via two drop down menu to select "To-Fro" edge %>
 <%# This will act as way to describe the DAG until we figure out which JS UI library to use %>
+<div class='page-header text-center'>
+  <h1 class="my-2 h3"><%= @workflow.name %></h1>
 
-<div class="d-flex justify-content-center mb-3">
-  <%= button_to t('dashboard.jobs_workflow_submit'), project_workflow_path(@project.id, @workflow.id), method: :post, class: "btn btn-primary" %>
+  <small class="text-muted"><%= @workflow.description %></small>
 </div>
+
+<br>
+
+<%= bootstrap_form_for(@workflow, url: submit_project_workflow_path(@project.id, @workflow.id), method: :post) do |form| %>
+  <div class='card'>
+    <div class='card-group'>
+      <div class="card">
+        <div class='card-body'>
+          <div class="field mt-3">
+            <strong>Source Launcher (To)</strong><br>
+              
+            <% 7.times do |i| %>
+              <%= select_tag "workflow[source_ids][]", 
+                    options_from_collection_for_select(@launchers, :id, :title),
+                    include_blank: true, class: 'form-control mb-2' %>
+            <% end %>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class='card-body'>
+          <div class="field mt-3">
+            <strong>Target Launcher (Fro)</strong><br>
+
+            <% 7.times do |i| %>
+              <%= select_tag "workflow[target_ids][]", 
+                    options_from_collection_for_select(@launchers, :id, :title),
+                    include_blank: true, class: 'form-control mb-2' %>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <br>
+  <p>
+    <%= form.submit I18n.t('dashboard.jobs_workflow_submit'), class: 'btn btn-primary', title: 'Save project' %>
+    <%= form.button I18n.t('dashboard.reset'), type: :reset, class: 'btn btn-default', title: 'Clear form fields' %>
+  </p>
+<% end %>

@@ -5,7 +5,11 @@ class WorkflowsController < ApplicationController
 
   # GET /projects/:id/workflows/:id
   def show
-    # TODO: Complete it
+    @project = Project.find(params[:project_id])
+    @workflow = Workflow.find(params[:id], project_directory)
+    launcher_ids = @workflow.launcher_ids
+
+    @launchers = Launcher.all(project_directory).select { |l| launcher_ids.include?(l.id) }
   end
 
   # GET /projects/:id/workflows/new
@@ -27,6 +31,7 @@ class WorkflowsController < ApplicationController
   # POST /projects/:id/workflows/
   def create
     @workflow = Workflow.new(permit_params)
+    Rails.logger.warn(params[:workflow][:launcher_ids])
 
     if @workflow.save
       redirect_to project_path(project_id), notice: I18n.t('dashboard.jobs_workflow_created')
@@ -61,6 +66,14 @@ class WorkflowsController < ApplicationController
   # POST /projects/:project_id/workflows/:id/submit
   def submit
     # TODO: Add logic to call submit of each launcher based upon dependency DAG graph
+    Rails.logger.warn(params[:workflow][:source_ids])
+    Rails.logger.warn(params[:workflow][:target_ids])
+
+    @project = Project.find(params[:project_id])
+    @workflow = Workflow.find(params[:id], project_directory)
+
+    workflow.submit(submit_params)
+    redirect_to project_workflow_path(@project.id, @workflow.id), notice: I18n.t('dashboard.jobs_workflow_submitted')
   end
 
   private
@@ -83,6 +96,12 @@ class WorkflowsController < ApplicationController
       .permit(:name, :description, :id, launcher_ids: [])
       .merge(project_dir: project_directory)
   end
+
+  def submit_params
+    params
+    .require(:workflow)
+    .permit(:name, :description, :id, :launcher_ids, :source_ids, :target_ids)
+    .merge(project_dir: project_directory)
 
   def project_directory
     Project.find(params[:project_id]).directory

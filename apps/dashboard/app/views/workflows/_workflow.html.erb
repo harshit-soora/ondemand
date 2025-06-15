@@ -17,13 +17,29 @@
       <div class="row">
         <div class="col">
           <%= link_to I18n.t('dashboard.show'), project_workflow_path(@project.id, workflow.id),
+<<<<<<< HEAD
+<<<<<<< HEAD
                       class: "btn btn-info launcher-button" %>
+=======
+                      class: 'btn btn-info launcher-button #{disabled_class}' %>
+>>>>>>> 6a70917a (Moved workflows from new page to project page)
+=======
+                      class: "btn btn-info launcher-button" %>
+>>>>>>> a42fbd89 (Cleaned the PR, remove lookup workflow.yml and no need to save project_id in <workflow-id>.yml file and few typos)
         </div>
         <div class="col">
           <%= button_to I18n.t('dashboard.delete'), project_workflow_path(@project.id, workflow.id),
                         method: :delete,
                         data: { confirm: t('dashboard.jobs_project_delete_project_confirmation') },
+<<<<<<< HEAD
+<<<<<<< HEAD
                         class: "btn btn-danger launcher-button" %>
+=======
+                        class: 'btn btn-danger launcher-button #{disabled_class}' %>
+>>>>>>> 6a70917a (Moved workflows from new page to project page)
+=======
+                        class: "btn btn-danger launcher-button" %>
+>>>>>>> a42fbd89 (Cleaned the PR, remove lookup workflow.yml and no need to save project_id in <workflow-id>.yml file and few typos)
         </div>
       </div>
     </div>
