@@ -182,6 +182,11 @@ en:
     jobs_select_directory_placeholder: Click on project below to import to your home page (Optional)
     jobs_workflow_button: Workflows
     jobs_workflow_submit: Submit Workflow
+    jobs_create_blank_workflow: Create a new workflow
+    jobs_workflow_created: Workflow successfully created!
+    jobs_workflow_name_placeholder: Workflow name
+    jobs_workflow_name_validation: Workflow name may only contain letters, digits, dashes, underscores, and spaces
+    jobs_workflow_description_placeholder: Workflow description
     launch: Launch
     motd_erb_render_error: 'MOTD was not parsed or rendered correctly: %{error_message}'
     motd_title: Message of the Day

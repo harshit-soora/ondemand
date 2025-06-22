@@ -31,7 +31,24 @@ class WorkflowsController < ApplicationController
 
   # POST /projects/:id/workflows/
   def create
-    # TODO: Complete it
+    @project = Project.find(params[:project_id])
+    Workflow.project_dir = @project.directory
+    @workflow = Workflow.new(permit_params)
+
+    if @workflow.save
+      redirect_to project_workflows_path, notice: I18n.t('dashboard.jobs_workflow_created')
+    else
+      # TODO: Rename "jobs_project_*"" to "jobs_*" to generalize
+      message = if @workflow.errors[:save].empty?
+                  I18n.t('dashboard.jobs_project_validation_error')
+                else
+                  I18n.t(
+                    'dashboard.jobs_project_generic_error', error: @workflow.collect_errors
+                  )
+                end
+      flash.now[:alert] = message
+      render :new
+    end
   end
 
   # DELETE /projects/:id/workflows/:id
@@ -48,6 +65,11 @@ class WorkflowsController < ApplicationController
 
   def index_params
     params.permit(:project_id).to_h.symbolize_keys
+
+  def permit_param
+    params
+      .require(:workflow)
+      .permit(:name, :description, :id)
   end
 
 end
