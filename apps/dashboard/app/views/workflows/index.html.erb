@@ -3,5 +3,44 @@
   <small class="text-muted">This is a preview of the new 'Workflow Manager' for Launchers</small>
 </div>
 
-<%# TODO Show workflows created for this project %>
-<%# TODO Add support to add new workflows to this project %>
+<div class="row mt-3">
+  <div class="col-md-9">
+    <div class="row">
+      <% @workflows.each do |workflow| %>
+        <div id="<%= workflow.id %>" class="col-md-3 project-icon project-card">
+          <%= link_to(project_workflow_path(@project.id, workflow.id), class: 'text-dark') do %>
+            <div class="text-center d-flex justify-content-center">
+              <strong>
+                <%= content_tag(:p, workflow.name) %>
+              </strong>
+            </div>
+            <div class="row">
+              <div class="col">
+                <%= button_to 'Delete', project_workflow_path(@project.id, workflow.id), class: 'btn btn-danger w-100 mb-1', method: 'delete',
+                    form: { class: 'button_to d-flex justify-content-center' },
+                    data: { confirm: I18n.t('dashboard.jobs_project_delete_project_confirmation') }
+                %>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="mt-5 justify-content-center text-center project-icon">
+      <%= link_to(new_project_workflow_path,
+                    title: I18n.t('dashboard.jobs_create_blank_workflow'),
+                    class: 'text-dark btn btn-link') do
+      %>
+        <div class="text-center d-flex justify-content-center">
+          <strong>
+            <%= icon_tag(URI.parse("fas://cubes")) %><br>
+            <%= I18n.t('dashboard.jobs_create_blank_workflow') %>
+          </strong>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</div>
