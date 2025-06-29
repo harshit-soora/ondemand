@@ -16,7 +16,7 @@ class WorkflowsController < ApplicationController
 
   # GET /projects/:id/workflows/new
   def new
-    @workflow = Workflow.new
+    @workflow = Workflow.new(index_params)
   end
 
   # GET /projects/:id/workflows/edit
@@ -31,8 +31,6 @@ class WorkflowsController < ApplicationController
 
   # POST /projects/:id/workflows/
   def create
-    @project = Project.find(params[:project_id])
-    Workflow.project_dir = @project.directory
     @workflow = Workflow.new(permit_params)
 
     if @workflow.save
@@ -53,7 +51,19 @@ class WorkflowsController < ApplicationController
 
   # DELETE /projects/:id/workflows/:id
   def destroy
-    # TODO: Complete it
+    workflow_id = params[:id]
+    @workflow = Workflow.find(workflow_id)
+
+    if @workflow.nil?
+      redirect_to project_workflows_path, notice: I18n.t('dashboard.jobs_workflow_not_found', workflow_id: workflow_id)
+      return
+    end
+
+    if @workflow.destroy!
+      redirect_to project_workflows_path, notice: I18n.t('dashboard.jobs_workflow_deleted')
+    else
+      redirect_to project_workflows_path, notice: I18n.t('dashboard.jobs_project_generic_error', error: @workflow.collect_errors)
+    end
   end
 
   # POST /projects/:project_id/workflows/:id/submit
@@ -64,12 +74,14 @@ class WorkflowsController < ApplicationController
   private
 
   def index_params
-    params.permit(:project_id)
+    params.permit(:project_id).to_h.symbolize_keys
+  end
 
-  def permit_param
+  def permit_params
     params
       .require(:workflow)
       .permit(:name, :description, :id)
+      .merge(project_id: params[:project_id])
   end
 
 end

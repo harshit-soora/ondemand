@@ -15,8 +15,10 @@ class Workflow
       file
     end
 
-    def all(project_dir)
-      f = File.read(workflows_file)
+    def all(project_id)
+      project = Project.find(project_id)
+      project_dir = project.directory
+      f = File.read(workflows_file(project_dir))
       YAML.safe_load(f).to_h.map do |id, workflow_name|
         Workflow.new({ id: id, name: workflow_name })
       end
@@ -30,16 +32,27 @@ class Workflow
     end
 
     def find(id)
-      # TODO: Complete it
+      f = File.read(workflows_file(project_dir))
+      opts = YAML.safe_load(f).to_h.select do |id, workflow_name|
+        id == id.to_s
+      end.map do |id, workflow_name|
+        { id: id, name: workflow_name }
+      end.first
+      return nil if opts.nil?
+
+      Workflow.new(opts)
     end
   end
   
-  attr_reader :id, :name, :description
+  attr_reader :id, :name, :description, :project_id, :project_dir
 
   def initialize(attributes = {})
     @id = attributes[:id]
     @name = attributes[:name]
     @description = attributes[:description]
+    @project_id = attributes[:project_id]
+    project = Project.find(@project_id)
+    @project_dir = project.directory unless project.nil?
   end
 
   def to_h
@@ -60,21 +73,20 @@ class Workflow
   end
 
   def save_manifest(operation)
-    file = Workflow.workflows_dir.join("#{@id}.yml")
-    FileUtils.touch(file) unless file.exist?
-    Pathname(file).write(to_h.deep_stringify_keys.compact.to_yaml)
+    FileUtils.touch(manifest_file) unless manifest_file.exist?
+    Pathname(manifest_file).write(to_h.deep_stringify_keys.compact.to_yaml)
 
     true
   rescue StandardError => e
-    errors.add(operation, I18n.t('dashboard.jobs_project_save_error', path: file))
-    Rails.logger.warn "Cannot save workflow manifest: #{file} with error #{e.class}:#{e.message}"
+    errors.add(operation, I18n.t('dashboard.jobs_project_save_error', path: manifest_file))
+    Rails.logger.warn "Cannot save workflow manifest: #{manifest_file} with error #{e.class}:#{e.message}"
     false
   end
 
   def add_to_workflow(operation)
-    f = File.read(Workflow.workflows_file)
+    f = File.read(Workflow.workflows_file(project_dir))
     new_table = YAML.safe_load(f).to_h.merge(Hash[id, name.to_s])
-    File.write(Workflow.workflows_file, new_table.to_yaml)
+    File.write(Workflow.workflows_file(project_dir), new_table.to_yaml)
     true
   rescue StandardError => e
     errors.add(operation, "Cannot update workflow lookup file with error #{e.class}:#{e.message}")
@@ -83,6 +95,27 @@ class Workflow
 
   def collect_errors
     errors.map(&:message).join(', ')
+  end
+
+  def destroy!
+    remove_from_lookup
+    FileUtils.remove_entry(manifest_file, true)
+    true
+  end
+
+  def remove_from_lookup
+    f = File.read(Workflow.workflows_file(project_dir))
+    new_table = YAML.safe_load(f).except(id)
+    File.write(Workflow.workflows_file(project_dir), new_table.to_yaml)
+    true
+  rescue StandardError => e
+    errors.add(:update, "Cannot update lookup file with error #{e.class}:#{e.message}")
+    false
+  end
+
+  def manifest_file
+    workflows_dir = Pathname.new("#{@project_dir}/.ondemand/workflows")
+    file = workflows_dir.join("#{@id}.yml")
   end
 
   # TODO: Add logic to save the DAG relation between launchers like array of <launcher #1, launcher #2>
