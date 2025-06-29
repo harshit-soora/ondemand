@@ -51,8 +51,9 @@ class WorkflowsController < ApplicationController
 
   # DELETE /projects/:id/workflows/:id
   def destroy
+    project_id = params[:project_id]
     workflow_id = params[:id]
-    @workflow = Workflow.find(workflow_id)
+    @workflow = Workflow.find(project_id, workflow_id)
 
     if @workflow.nil?
       redirect_to project_workflows_path, notice: I18n.t('dashboard.jobs_workflow_not_found', workflow_id: workflow_id)

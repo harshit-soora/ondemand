@@ -31,12 +31,14 @@ class Workflow
       SecureRandom.alphanumeric(8).downcase
     end
 
-    def find(id)
+    def find(project_id, id)
+      project = Project.find(project_id)
+      project_dir = project.directory
       f = File.read(workflows_file(project_dir))
       opts = YAML.safe_load(f).to_h.select do |id, workflow_name|
         id == id.to_s
       end.map do |id, workflow_name|
-        { id: id, name: workflow_name }
+        { id: id, name: workflow_name, project_id: project_id}
       end.first
       return nil if opts.nil?
 
