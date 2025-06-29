@@ -31,8 +31,6 @@ class WorkflowsController < ApplicationController
 
   # POST /projects/:id/workflows/
   def create
-    @project = Project.find(params[:project_id])
-    Workflow.project_dir = @project.directory
     @workflow = Workflow.new(permit_params)
 
     if @workflow.save
@@ -70,6 +68,7 @@ class WorkflowsController < ApplicationController
     params
       .require(:workflow)
       .permit(:name, :description, :id)
+      .merge(project_id: params[:project_id])
   end
 
 end

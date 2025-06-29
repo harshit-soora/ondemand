@@ -36,12 +36,15 @@ class Workflow
     end
   end
   
-  attr_reader :id, :name, :description
+  attr_reader :id, :name, :description, :project_id, :project_dir
 
   def initialize(attributes = {})
     @id = attributes[:id]
     @name = attributes[:name]
     @description = attributes[:description]
+    @project_id = attributes[:project_id]
+    project = Project.find(@project_id)
+    @project_dir = project.directory unless project.nil?
   end
 
   def to_h
@@ -74,9 +77,9 @@ class Workflow
   end
 
   def add_to_workflow(operation)
-    f = File.read(Workflow.workflows_file)
+    f = File.read(Workflow.workflows_file(project_dir))
     new_table = YAML.safe_load(f).to_h.merge(Hash[id, name.to_s])
-    File.write(Workflow.workflows_file, new_table.to_yaml)
+    File.write(Workflow.workflows_file(project_dir), new_table.to_yaml)
     true
   rescue StandardError => e
     errors.add(operation, "Cannot update workflow lookup file with error #{e.class}:#{e.message}")
