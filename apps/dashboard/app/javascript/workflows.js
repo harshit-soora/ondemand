@@ -99,7 +99,12 @@ class WorkflowState {
         );
       }
       if (metadata.edges) {
-        metadata.edges.forEach(e => createEdge(e.from, e.to));
+        metadata.edges.forEach(e => {
+          const edgeObj = createEdge(e.from, e.to);
+          edgeObj.restoreBends(e.bends);
+          edgeObj._userEdited = e.userEdited;
+          edgeObj.update();
+        });
       }
       if (metadata.zoom) {
         this.pointer.zoomRef.value = metadata.zoom;
@@ -124,7 +129,9 @@ class WorkflowState {
       })),
       edges: this.edges.map(e => ({
         from: e.fromBox.id,
-        to: e.toBox.id
+        to: e.toBox.id,
+        bends: e.serializeBends() || [],
+        userEdited: e._userEdited || false
       })),
       zoom: this.pointer.zoomRef.value,
       job_hash: this.job_hash,
@@ -629,6 +636,7 @@ class DragController {
     });
 
     edges.push(edge);
+    return edge;
   }
 
   function makeLauncher(row, col, id, title) {
