@@ -39,6 +39,7 @@ class Workflow
         launcher_ids: meta[:boxes].map { |b| b["id"] },
         source_ids: meta[:edges].map { |e| e["from"] },
         target_ids: meta[:edges].map { |e| e["to"] },
+        edges: meta[:edges] || [],
         project_dir: project_dir,
         start_launcher: meta[:start_launcher] || nil
       }
@@ -142,6 +143,8 @@ class Workflow
 
     all_launchers = Launcher.all(attributes[:project_dir])
     job_id_hash = {}  # launcher-job_id hash
+    port_connections = build_port_connections(attributes[:edges] || [], all_launchers)
+    Rails.logger.info("Port connections: #{port_connections}")
 
     for id in order
       launcher = all_launchers.find { |l| l.id == id }
@@ -152,8 +155,9 @@ class Workflow
       dependent_launchers = dependency[id] || []
 
       begin
-        jobs = dependent_launchers.map { |id| job_id_hash.dig(id, :job_id) }.compact
-        opts = submit_launcher_params(launcher, jobs).to_h.symbolize_keys
+        jobs = dependent_launchers.map { |dep_id| job_id_hash.dig(dep_id, :job_id) }.compact
+        port_overrides = port_connections[id] || {}
+        opts = submit_launcher_params(launcher, jobs, port_overrides).to_h.symbolize_keys
         job_id = launcher.submit(opts, write_cache: false)
         if job_id.nil?
           Rails.logger.warn("Launcher #{id} with opts #{opts} did not return a job ID.")
@@ -173,10 +177,68 @@ class Workflow
     nil
   end
 
-  def submit_launcher_params(launcher, dependent_jobs)
+  # Build a mapping of input port values from connected output ports
+  # Returns: { target_launcher_id => { input_port_key => "value1:value2:..." } }
+  def build_port_connections(edges, all_launchers)
+    port_values = Hash.new { |h, k| h[k] = Hash.new { |h2, k2| h2[k2] = [] } }
+
+    edges.each do |edge|
+      from_id = edge["from"]
+      to_id = edge["to"]
+      from_port_key = edge["fromPort"]
+      to_port_key = edge["toPort"]
+
+      next if from_port_key.blank? || to_port_key.blank?
+
+      source_launcher = all_launchers.find { |l| l.id == from_id }
+      next unless source_launcher
+
+      output_value = get_port_value(source_launcher, from_port_key, 'output_port')
+      next if output_value.blank?
+
+      port_values[to_id][to_port_key] << output_value
+    end
+
+    result = {}
+    port_values.each do |target_id, ports|
+      result[target_id] = {}
+      ports.each do |port_key, values|
+        result[target_id][port_key] = values.join(" : ")
+      end
+    end
+
+    result
+  end
+
+  def get_port_value(launcher, port_key, port_type)
+    # port_key is uppercase ("OUTPUT_VAR") and attribute id is like "auto_environment_variable_output_var"
+    normalized_key = port_key.to_s.downcase
+    attr_id = "auto_environment_variable_#{normalized_key}"
+
+    attr = launcher.smart_attributes.find do |a|
+      a.id.to_s == attr_id && a.opts[:port_type].to_s == port_type
+    end
+
+    attr&.value.to_s
+  end
+
+  def submit_launcher_params(launcher, dependent_jobs, port_overrides = {})
     launcher_data = launcher.cacheless_attributes.each_with_object({}) do |attr, hash|
       hash[attr.id.to_s] = attr.opts[:value]
     end
+
+    port_overrides.each do |port_key, value|
+      normalized_key = port_key.to_s.downcase
+      attr_key = "auto_environment_variable_#{normalized_key}"
+      
+      existing_value = launcher_data[attr_key].to_s
+      if existing_value.present?  # append all environment values together with `:` like in Linux Path
+        launcher_data[attr_key] = "#{existing_value} : #{value}"
+      else
+        launcher_data[attr_key] = value
+      end
+    end
+    
     launcher_data["afterok"] = Array(dependent_jobs)
     launcher_data
   end

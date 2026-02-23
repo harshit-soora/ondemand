@@ -6,6 +6,7 @@ import { OrthogonalEdge } from './edge.js';
  * Helper Classes to support Drag and Drop UI 
  */
 
+// TODO:  Make it a class and move down
 // Tooltip singleton class for port and edge hover
 const Tooltip = {
   el: null,
@@ -373,6 +374,7 @@ class Box {
       };
     }
     
+    // TODO: Call variable directly from scss for consistency
     // matches CSS gap, width/height
     const portGap = 8;
     const portSize = 12;
@@ -758,6 +760,7 @@ class DragController {
       return;
     }
 
+    // TODO: See if we can avoid defining SVG_NS
     const SVG_NS = 'http://www.w3.org/2000/svg';
     const group = document.createElementNS(SVG_NS, 'g');
     group.classList.add('edge');
