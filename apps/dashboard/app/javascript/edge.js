@@ -10,6 +10,8 @@ export class OrthogonalEdge {
     this.fromBox = fromBox;
     this.toBox   = toBox;
     this.group   = svgGroup;
+    this.fromPortKey = null;
+    this.toPortKey = null;
 
     // User-created bend points (absolute coords).
     // Empty by default → auto-routed 3-segment path.
@@ -122,6 +124,9 @@ export class OrthogonalEdge {
 
 	/*--------------------     Port Helpers     --------------------*/
   _fromPort() {
+    if (this.fromPortKey && typeof this.fromBox.getPortPosition === 'function') {
+      return this.fromBox.getPortPosition(this.fromPortKey, 'output');
+    }
     return {
       x: this.fromBox.x + this.fromBox.w,
       y: this.fromBox.y + this.fromBox.h / 2
@@ -129,6 +134,9 @@ export class OrthogonalEdge {
   }
 
   _toPort() {
+    if (this.toPortKey && typeof this.toBox.getPortPosition === 'function') {
+      return this.toBox.getPortPosition(this.toPortKey, 'input');
+    }
     return {
       x: this.toBox.x,
       y: this.toBox.y + this.toBox.h / 2

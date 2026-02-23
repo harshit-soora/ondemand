@@ -4,7 +4,7 @@
 class LaunchersController < ApplicationController
 
   before_action :find_project
-  before_action :find_launcher, only: [:show, :edit, :destroy, :submit, :save, :clone]
+  before_action :find_launcher, only: [:show, :edit, :destroy, :submit, :save, :clone, :ports]
 
   SAVE_LAUNCHER_KEYS = [
     :cluster, :auto_accounts, :auto_accounts_exclude, :auto_accounts_fixed,
@@ -88,6 +88,27 @@ class LaunchersController < ApplicationController
     @remove_delete_button = true
     @show_job_info_button = true
     render(partial: 'projects/launcher_buttons', locals: { launcher: launcher })
+  end
+
+  # GET /projects/:project_id/launchers/:id/ports
+  def ports
+    env_vars = @launcher.smart_attributes.select { |attr| attr.id.to_s.start_with?('auto_environment_variable') }
+    
+    ports_data = { input: [], output: [] }
+    env_vars.each do |attr|
+      key = attr.id.to_s.sub('auto_environment_variable_', '').upcase
+      port = { key: key, value: attr.value.to_s }
+      port_type = attr.opts[:port_type].to_s
+      
+      # TODO: Fix port to just 'input'/'output'
+      if port_type == 'input_port'
+        ports_data[:input] << port
+      elsif port_type == 'output_port'
+        ports_data[:output] << port
+      end
+    end
+
+    render json: ports_data
   end
 
   private

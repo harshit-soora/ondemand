@@ -27,6 +27,7 @@ Rails.application.routes.draw do
         post 'save', on: :member
         get 'render_button', on: :member
         get 'clone', on: :member
+        get 'ports', on: :member
       end
     end
   end

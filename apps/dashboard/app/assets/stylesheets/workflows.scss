@@ -15,6 +15,9 @@ $gap: 20;
   --danger: #b71c1c;
   --danger-weak: #c628285c;
   --box-selected: #ffecb3;
+  --port-input: #4CAF50;
+  --port-output: #2196F3;
+  --port-queued: #FF9800;
   // To pass on the variable to javascript
   --grid_cols: #{$cols};
   --grid_rows: #{$rows};
@@ -243,6 +246,7 @@ svg.edges {
   transform-origin: top left;
   transition: transform 0.15s;
   will-change: transform;
+  overflow: visible;
 }
 
 .launcher-title-grab {
@@ -261,22 +265,106 @@ svg.edges {
   outline: 3px dashed var(--accent);
 }
 
-.port {
+.ports-container {
   position: absolute;
-  top: 50%;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 2px solid var(--accent);
-  background: var(--bg);
-  transform: translateY(-50%);
-  z-index: 2;
-  pointer-events: none;
-  transition: background 0.15s, box-shadow 0.15s;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 0;
+  pointer-events: auto;
+  z-index: 10;
 }
 
-.port-in  { left: -7px; }
-.port-out { right: -7px; }
+.ports-container-input {
+  left: -6px;
+  top: 0;
+  height: 100%;
+}
+
+.ports-container-output {
+  right: -6px;
+  top: 0;
+  height: 100%;
+}
+
+// Port styling - X shape using ::before and ::after
+.port {
+  width: 12px;
+  height: 12px;
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 3px;
+    border-radius: 1px;
+    transition: width 0.1s, height 0.1s;
+  }
+
+  &::before {
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+
+  &::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+  }
+
+  &:hover::before,
+  &:hover::after {
+    width: 12px;
+    height: 4px;
+  }
+
+  &.connect-queued::before,
+  &.connect-queued::after {
+    background: var(--port-queued) !important;
+  }
+  
+  &.connect-queued {
+    animation: port-pulse 1s infinite;
+  }
+}
+
+.port-input {
+  &::before,
+  &::after {
+    background: var(--port-input);
+  }
+}
+
+.port-output {
+  &::before,
+  &::after {
+    background: var(--port-output);
+  }
+}
+
+@keyframes port-pulse {
+  0% { filter: drop-shadow(0 0 0 rgba(255, 152, 0, 0.7)); }
+  50% { filter: drop-shadow(0 0 4px rgba(255, 152, 0, 1)); }
+  100% { filter: drop-shadow(0 0 0 rgba(255, 152, 0, 0.7)); }
+}
+
+// Port tooltip
+.port-tooltip {
+  position: absolute;
+  background: #e0e0e0;
+  color: #222;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 1000;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
 
 .launcher-box.connect-queued .port-out {
   background: var(--accent);

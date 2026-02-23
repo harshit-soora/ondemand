@@ -1,10 +1,31 @@
 import { DAG } from './dag.js';
 import { rootPath } from './config.js';
-import { OrthogonalEdge, createOrthogonalEdge } from './edge.js';
+import { OrthogonalEdge } from './edge.js';
 
 /*
  * Helper Classes to support Drag and Drop UI 
  */
+
+// Tooltip singleton class for port and edge hover
+const Tooltip = {
+  el: null,
+  init() {
+    if (this.el) return;
+    this.el = document.createElement('div');
+    this.el.className = 'port-tooltip';
+    this.el.style.display = 'none';
+    document.body.appendChild(this.el);
+  },
+  show(text, x, y) {
+    this.el.textContent = text;
+    this.el.style.left = `${x + 10}px`;
+    this.el.style.top = `${y - 10}px`;
+    this.el.style.display = 'block';
+  },
+  hide() {
+    this.el.style.display = 'none';
+  }
+};
 
 // Handles boxes, edges, auto-save, auto-load and saving to workflow model
 class WorkflowState {
@@ -100,10 +121,12 @@ class WorkflowState {
       }
       if (metadata.edges) {
         metadata.edges.forEach(e => {
-          const edgeObj = createEdge(e.from, e.to);
-          edgeObj.restoreBends(e.bends);
-          edgeObj._userEdited = e.userEdited;
-          edgeObj.update();
+          const edgeObj = createEdge(e.from, e.to, e.fromPort, e.toPort);
+          if (edgeObj) {
+            edgeObj.restoreBends(e.bends);
+            edgeObj._userEdited = e.userEdited;
+            edgeObj.update();
+          }
         });
       }
       if (metadata.zoom) {
@@ -130,6 +153,8 @@ class WorkflowState {
       edges: this.edges.map(e => ({
         from: e.fromBox.id,
         to: e.toBox.id,
+        fromPort: e.fromPortKey || null,
+        toPort: e.toPortKey || null,
         bends: e.serializeBends() || [],
         userEdited: e._userEdited || false
       })),
@@ -318,7 +343,7 @@ class JobPoller {
 
 // Box represents a draggable launcher box
 class Box {
-  constructor(id, el, row, col, w, h) {
+  constructor(id, el, row, col, w, h, ports = { input: [], output: [] }) {
     this.id = id;
     this.el = el;
     this.row = row;
@@ -327,12 +352,38 @@ class Box {
     this.y = 0;
     this.w = w;
     this.h = h;
+    this.ports = ports;
   }
 
   moveTo(x, y) {
     this.x = x;
     this.y = y;
     this.el.style.transform = `translate(${x}px, ${y}px)`;
+  }
+
+  getPortPosition(portKey, type) {
+    const ports = this.ports[type];
+    const index = ports.findIndex(p => p.key === portKey);
+    const PORT_OFFSET = 6;
+    
+    if (index === -1) {
+      return {
+        x: type === 'input' ? this.x : this.x + this.w,
+        y: this.y + this.h / 2
+      };
+    }
+    
+    // matches CSS gap, width/height
+    const portGap = 8;
+    const portSize = 12;
+    const totalPortsHeight = (ports.length * portSize) + ((ports.length - 1) * portGap);
+    const startY = this.y + (this.h - totalPortsHeight) / 2;
+    const portY = startY + (index * (portSize + portGap)) + (portSize / 2);
+    
+    return {
+      x: type === 'input' ? this.x - PORT_OFFSET : this.x + this.w + PORT_OFFSET,
+      y: portY
+    };
   }
 }
 
@@ -524,7 +575,7 @@ class DragController {
   let selectedLauncherId = null;
   let selectedEdge = null;
   let connectMode = false;
-  let connectQueue = null;
+  let connectQueue = null; // Now stores: { box, port, portEl } for port-based connections
   let gridExpanded = false;
   let gridCols = parseInt(styles.getPropertyValue('--grid_cols'));
   let gridRows = parseInt(styles.getPropertyValue('--grid_rows'));
@@ -537,6 +588,7 @@ class DragController {
   const workflowState = new WorkflowState(projectId, workflowId, boxes, edges, dag, pointer, baseWorkflowUrl);
   const workflowSaveCb = () => workflowState.saveToSession();
   const drag = new DragController(pointer, boxes, edges, gridCols, gridRows, cell_w, cell_h, halfGap, workflowSaveCb);
+  Tooltip.init();
 
   function applyZoom() {
     stageZoom.style.transform = `scale(${zoomState.value})`;
@@ -606,11 +658,91 @@ class DragController {
     }
   }
 
-  function createEdge(fromId, toId) {
+  async function fetchPorts(launcherId) {
+    try {
+      const response = await fetch(`${baseLauncherUrl}/${launcherId}/ports`);
+      return response.ok ? await response.json() : { input: [], output: [] };
+    } catch {
+      return { input: [], output: [] };
+    }
+  }
+
+  function renderPorts(box, onPortClick) {
+    ['input', 'output'].forEach(type => {
+      if (box.ports[type].length === 0) return;
+
+      const container = document.createElement('div');
+      container.className = `ports-container ports-container-${type}`;
+
+      box.ports[type].forEach(port => {
+        const portEl = document.createElement('div');
+        portEl.className = `port port-${type}`;
+        portEl.dataset.key = port.key;
+
+        portEl.addEventListener('mouseenter', e => Tooltip.show(port.key, e.clientX, e.clientY));
+        portEl.addEventListener('mousemove', e => Tooltip.show(port.key, e.clientX, e.clientY));
+        portEl.addEventListener('mouseleave', () => Tooltip.hide());
+        portEl.addEventListener('click', e => {
+          e.stopPropagation();
+          onPortClick(box, port, type, portEl);
+        });
+
+        container.appendChild(portEl);
+      });
+
+      box.el.appendChild(container);
+    });
+  }
+
+  function handlePortClick(box, port, type, portEl) {
+    if (!connectMode) return;
+
+    if (!connectQueue) {
+      // First click - must be output port
+      if (type !== 'output') {
+        alert('Start connection from an output port (right side).');
+        return;
+      }
+      connectQueue = { box, port, portEl };
+      portEl.classList.add('connect-queued');
+    } else {
+      // Second click - must be input port on different launcher
+      if (type !== 'input') {
+        alert('Connect to an input port (left side).');
+        return;
+      }
+      if (connectQueue.box.id === box.id) {
+        connectQueue.portEl.classList.remove('connect-queued');
+        connectQueue = null;
+        alert('Cannot connect a launcher to itself.');
+        return;
+      }
+
+      createEdge(connectQueue.box.id, box.id, connectQueue.port.key, port.key);
+      connectQueue.portEl.classList.remove('connect-queued');
+      connectQueue = null;
+      workflowSaveCb();
+    }
+  }
+
+  function getEdgeTooltipText(edge) {
+    if (edge.fromPortKey) {
+      const port = edge.fromBox.ports.output.find(p => p.key === edge.fromPortKey);
+      if (port) {
+        return `${port.key}: ${port.value || '(empty)'}`;
+      }
+    }
+    return 'Connection';
+  }
+
+  function createEdge(fromId, toId, fromPortKey = null, toPortKey = null) {
     if (fromId === toId) return;
     if (!boxes.has(fromId) || !boxes.has(toId)) return;
 
-    const existingEdge = edges.find(e => e.fromBox.id === fromId && e.toBox.id === toId);
+    const existingEdge = edges.find(e => 
+      e.fromBox.id === fromId && e.toBox.id === toId &&
+      e.fromPortKey === fromPortKey && e.toPortKey === toPortKey
+    );
     if (existingEdge) return;
 
     const reverseEdge = edges.find(e => e.fromBox.id === toId && e.toBox.id === fromId);
@@ -626,66 +758,71 @@ class DragController {
       return;
     }
 
-    const edge = createOrthogonalEdge(edgesSvg, boxes, fromId, toId, (selectedE) => {
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const group = document.createElementNS(SVG_NS, 'g');
+    group.classList.add('edge');
+    edgesSvg.appendChild(group);
+
+    const edge = new OrthogonalEdge(boxes.get(fromId), boxes.get(toId), group);
+    
+    // Set port keys BEFORE calling update() so edge routes to correct positions
+    edge.fromPortKey = fromPortKey;
+    edge.toPortKey = toPortKey;
+    edge.update();
+
+    const handleClick = (e) => {
+      e.stopPropagation();
       document.querySelectorAll('.edge.selected').forEach(el => el.classList.remove('selected'));
       document.querySelectorAll('.launcher-box.selected').forEach(el => el.classList.remove('selected'));
       selectedLauncherId = null;
+      edge.group.classList.add('selected');
+      selectedEdge = edge;
+    };
+    edge.clickAreaEl.addEventListener('click', handleClick);
+    edge.pathEl.addEventListener('click', handleClick);
 
-      selectedE.group.classList.add('selected');
-      selectedEdge = selectedE;
-    });
+    edge.clickAreaEl.addEventListener('mouseenter', e => Tooltip.show(getEdgeTooltipText(edge), e.clientX, e.clientY));
+    edge.clickAreaEl.addEventListener('mousemove', e => Tooltip.show(getEdgeTooltipText(edge), e.clientX, e.clientY));
+    edge.clickAreaEl.addEventListener('mouseleave', () => Tooltip.hide());
 
     edges.push(edge);
     return edge;
   }
 
   function makeLauncher(row, col, id, title) {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       const url = `${baseLauncherUrl}/${id}/render_button`;
-      $.get(url, function(html) {
+      $.get(url, async function(html) {
         const $launcher = $(`
           <div class='launcher-box' id='launcher_${id}' data-row='${row}' data-col='${col}'>
-            <span class='port port-in' title='Input'></span>
             <div class='row'>
               <div class='col launcher-title-grab'>${title}</div>
             </div>
             ${html}
-            <span class='port port-out' title='Output'></span>
           </div>
         `);
 
         $('#stage').append($launcher);
         const pos = drag.cellToXY(row, col);
         $launcher.css({ transform: `translate(${pos.x}px, ${pos.y}px)` });
-        const box = new Box(id, $launcher[0], row, col, $launcher.outerWidth(), $launcher.outerHeight());
+
+        const ports = await fetchPorts(id);
+        const box = new Box(id, $launcher[0], row, col, $launcher.outerWidth(), $launcher.outerHeight(), ports);
         boxes.set(id, box);
         drag.updateBoxPosition(box, pos.x, pos.y);
 
+        renderPorts(box, handlePortClick);
+
         // Pointer / drag events
         $launcher.on('pointerdown', function(e) {
+          // Don't start drag if clicking on a port
+          if (e.target.closest('.port')) return;
           e.stopPropagation();
           selectedLauncherId = id;
           $('.launcher-box.selected').removeClass('selected');
           $launcher.addClass('selected');
           pointer.update(e);
           drag.beginDrag(box);
-        });
-
-        // Connect mode click
-        $launcher.on('click', function(e) {
-          if (!connectMode) return;
-          e.stopPropagation();
-          if (!connectQueue) {
-            connectQueue = id;
-            $launcher.addClass('connect-queued');
-          } else {
-            const fromId = connectQueue;
-            const toId = id;
-            $(`#launcher_${fromId}`).removeClass('connect-queued');
-            connectQueue = null;
-            createEdge(fromId, toId);
-            workflowSaveCb();
-          }
         });
 
         resolve();
@@ -763,7 +900,9 @@ class DragController {
     connectLauncherButton.classList.toggle('active', connectMode);
     connectLauncherButton.setAttribute('aria-pressed', String(connectMode));
     if (!connectMode && connectQueue) {
-      document.querySelector(`#launcher_${connectQueue}`)?.classList.remove('connect-queued');
+      if (connectQueue.portEl) {
+        connectQueue.portEl.classList.remove('connect-queued');
+      }
       connectQueue = null;
     }
   });

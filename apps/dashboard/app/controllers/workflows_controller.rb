@@ -163,7 +163,7 @@ class WorkflowsController < ApplicationController
   end
 
   def permit_json_data
-    params.permit(:project_id, :id, :zoom, :saved_at, :start_launcher, boxes: [:id, :title, :row, :col], edges: [:from, :to, :userEdited, bends: [:x, :y]]).to_h
+    params.permit(:project_id, :id, :zoom, :saved_at, :start_launcher, boxes: [:id, :title, :row, :col], edges: [:from, :to, :fromPort, :toPort, :userEdited, bends: [:x, :y]]).to_h
   end
 
   def metadata_params(json)
