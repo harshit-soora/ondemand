@@ -51,7 +51,8 @@ class Workflow
     end
   end
 
-  attr_accessor :id, :name, :description, :project_dir, :created_at, :launcher_ids, :metadata, :sync_key_enabled
+  attr_accessor :id, :name, :description, :project_dir, :created_at,
+                :launcher_ids, :metadata, :sync_key_enabled, :advanced_overrides
 
   validates :name, presence: true
   validates :launcher_ids, length: {minimum: 1}
@@ -65,6 +66,11 @@ class Workflow
     @launcher_ids = attributes[:launcher_ids] || []
     @metadata = attributes[:metadata] || {}
     @sync_key_enabled = attributes[:sync_key_enabled] || "0"
+    # advanced_overrides is a flat hash keyed by smart-attribute id, e.g.
+    #   { "auto_accounts" => "PAS1234",
+    #     "bc_num_hours" => "2",
+    #     "auto_environment_variable_count" => "100" }
+    @advanced_overrides = (attributes[:advanced_overrides] || {}).to_h.stringify_keys
   end
 
   def to_h
@@ -76,7 +82,8 @@ class Workflow
       :project_dir => project_dir,
       :launcher_ids => launcher_ids,
       :metadata => metadata,
-      :sync_key_enabled => sync_key_enabled
+      :sync_key_enabled => sync_key_enabled,
+      :advanced_overrides => advanced_overrides
     }
   end
 
@@ -127,14 +134,33 @@ class Workflow
   end
 
   def update_attrs(attributes, override = false)
-    [:name, :description, :launcher_ids, :metadata, :sync_key_enabled].each do |attribute|
+    [:name, :description, :launcher_ids, :metadata, :sync_key_enabled, :advanced_overrides].each do |attribute|
       next unless override || attributes.key?(attribute)
-      instance_variable_set("@#{attribute}".to_sym, attributes.fetch(attribute, ''))
+      value = attributes.fetch(attribute, '')
+      value = value.to_h.stringify_keys if attribute == :advanced_overrides && value.respond_to?(:to_h)
+      instance_variable_set("@#{attribute}".to_sym, value)
     end
   end
 
   def editable?
     manifest_file.writable? || !shared?(manifest_file)
+  end
+
+  # Build the smart-attribute objects that drive the Advanced Overrides form.
+  #
+  # We deliberately do NOT go through Launcher.new here: that constructor
+  # force-adds auto_batch_clusters and auto_scripts via add_required_fields,
+  # which we don't want on the workflow override form. Instead we just build
+  # the SmartAttribute objects directly from whatever the user has already
+  # configured in advanced_overrides. An empty workflow starts with no fields;
+  # the user adds them via "Add new option".
+  #
+  # Returns an array of SmartAttribute objects. The view treats this list
+  # the same way it treats a Launcher's cacheless_attributes.
+  def overrides_attributes
+    advanced_overrides.map do |id, value|
+      SmartAttributes::AttributeFactory.build(id.to_s, { value: value })
+    end
   end
 
   def submit(attributes = {})
@@ -163,7 +189,11 @@ class Workflow
       begin
         jobs = dependent_launchers.map { |id| job_id_hash.dig(id, :job_id) }.compact
         opts = submit_launcher_params(launcher, jobs, sync_key).to_h.symbolize_keys
+        # NOTE: write_cache: false here means the override values applied
+        # below do NOT pollute the per-launcher cache, so a solo run of the
+        # same launcher remains unaffected by these workflow-level overrides.
         job_id = launcher.submit(opts, write_cache: false)
+          Rails.logger.warn("HARSHIT #{id} with opts #{opts}.")
         if job_id.nil?
           Rails.logger.warn("Launcher #{id} with opts #{opts} did not return a job ID.")
         else
@@ -188,6 +218,16 @@ class Workflow
     end
     launcher_data["afterok"] = Array(dependent_jobs)
     launcher_data["ood_workflow_sync_key"] = sync_key if sync_key
+
+    # Apply workflow-level advanced overrides last, so they win against
+    # whatever the per-launcher form.yml provided. Only non-blank values
+    # override; blank fields are treated as "not set" rather than as
+    # "force this launcher's value to empty".
+    advanced_overrides.each do |key, value|
+      next if value.nil? || value.to_s.strip.empty?
+      launcher_data[key.to_s] = value
+    end
+
     launcher_data
   end
 

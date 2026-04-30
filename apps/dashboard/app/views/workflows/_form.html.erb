@@ -43,15 +43,32 @@
 
           <div class="field mt-3">
             <strong>Synchronization</strong><br>
-            <div class="form-check form-switch mt-2">
-              <%= hidden_field_tag "workflow[sync_key_enabled]", "0" %>
-              <%= check_box_tag "workflow[sync_key_enabled]", "1",
-                                @workflow.sync_key_enabled == "1",
-                                id: "workflow_sync_key_enabled",
-                                class: "form-check-input" %>
-              <%= label_tag "workflow_sync_key_enabled",
-                            "Enable OOD_WORKFLOW_SYNC_KEY #{form_label_tooltip(I18n.t('dashboard.jobs_workflow_sync_key_help'))}".html_safe,
-                            class: "form-check-label" %>
+            <div class="row align-items-center mt-2">
+              <div class="col">
+                <div class="form-check form-switch">
+                  <%= hidden_field_tag "workflow[sync_key_enabled]", "0" %>
+                  <%= check_box_tag "workflow[sync_key_enabled]", "1",
+                                    @workflow.sync_key_enabled == "1",
+                                    id: "workflow_sync_key_enabled",
+                                    class: "form-check-input" %>
+                  <%= label_tag "workflow_sync_key_enabled",
+                                "Enable OOD_WORKFLOW_SYNC_KEY #{form_label_tooltip(I18n.t('dashboard.jobs_workflow_sync_key_help'))}".html_safe,
+                                class: "form-check-label" %>
+                </div>
+              </div>
+              <div class="col-auto">
+                <%# Only the Advanced button is shown on the right-hand side.
+                    Clicking it expands the override form rendered below. %>
+                <button class="btn btn-outline-secondary btn-sm"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#workflow_advanced_collapse"
+                        aria-expanded="false"
+                        aria-controls="workflow_advanced_collapse"
+                        id="workflow_advanced_toggle">
+                  <%= I18n.t('dashboard.jobs_workflow_advanced_button') %>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -59,6 +76,17 @@
     </div>
   </div>
 </div>
+
+<%# Collapsible Advanced overrides form, in its own partial.
+    The override widgets keep their native launcher[<id>] field names; the
+    workflows controller re-maps params[:launcher] into advanced_overrides
+    on save/update. %>
+<% if @workflow_overrides %>
+  <div class="collapse" id="workflow_advanced_collapse">
+    <%= render partial: 'advanced' %>
+  </div>
+<% end %>
+
 <br>
 <p>
   <%= form.submit I18n.t('dashboard.save'), class: 'btn btn-primary', title: 'Save project' %>

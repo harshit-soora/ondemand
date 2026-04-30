@@ -16,12 +16,14 @@ class WorkflowsController < ApplicationController
   def new
     @workflow = Workflow.new(index_params)
     @launchers = Launcher.all(project_directory)
+    @workflow_overrides = @workflow.overrides_attributes
   end
 
   # GET /projects/:id/workflows/edit
   def edit
     return unless load_project_and_workflow_objects
     @launchers = Launcher.all(project_directory)
+    @workflow_overrides = @workflow.overrides_attributes
   end
 
   # TODO to remove this with launcher_ids as we will need them after new UI
@@ -54,9 +56,11 @@ class WorkflowsController < ApplicationController
     cloned = @workflow.deep_dup
     cloned.name += " (Copy)"
     session[:cloned_metadata] = cloned.metadata.to_h.deep_stringify_keys
+    session[:cloned_advanced_overrides] = cloned.advanced_overrides.to_h.deep_stringify_keys
 
     @workflow = cloned
     @launchers = Launcher.all(project_directory)
+    @workflow_overrides = @workflow.overrides_attributes
 
     render :new
   end
@@ -146,16 +150,46 @@ class WorkflowsController < ApplicationController
   end
 
   def permit_params
-    params
+    base = params
       .require(:workflow)
       .permit(:name, :description, :id, :sync_key_enabled, launcher_ids: [])
-      .merge(project_dir: project_directory, metadata: session.delete(:cloned_metadata) || {})
+
+    base.merge(
+      project_dir: project_directory,
+      metadata: session.delete(:cloned_metadata) || {},
+      advanced_overrides: extract_advanced_overrides ||
+                          session.delete(:cloned_advanced_overrides) || {}
+    )
   end
 
   def update_params
-    params
+    base = params
       .require(:workflow)
       .permit(:name, :description, :id, :sync_key_enabled, launcher_ids: [])
+      .to_h
+
+    base[:advanced_overrides] = extract_advanced_overrides || {}
+    base
+  end
+
+  # The override form re-uses the per-launcher smart-attribute widgets, which
+  # render their fields with name="launcher[<smart_attribute_id>]". So when
+  # the workflow form is submitted, the overrides arrive at params[:launcher],
+  # not under params[:workflow]. We pull them out here.
+  #
+  # Drops blank values and the *_min / *_max / *_exclude / *_fixed config
+  # keys (those are launcher-edit-time only). Returns nil when no launcher
+  # hash was submitted at all, so callers can fall back to cloned values.
+  def extract_advanced_overrides
+    raw = params[:launcher]
+    return nil if raw.blank?
+    raw = raw.to_unsafe_h if raw.respond_to?(:to_unsafe_h)
+    raw.to_h.each_with_object({}) do |(k, v), h|
+      key = k.to_s
+      next if key.end_with?('_min', '_max', '_exclude', '_fixed')
+      next if v.nil? || v.to_s.strip.empty?
+      h[key] = v
+    end
   end
 
   def project_directory
@@ -163,7 +197,9 @@ class WorkflowsController < ApplicationController
   end
 
   def permit_json_data
-    params.permit(:project_id, :id, :zoom, :saved_at, :start_launcher, boxes: [:id, :title, :row, :col], edges: [:from, :to]).to_h
+    params.permit(:project_id, :id, :zoom, :saved_at, :start_launcher,
+                  boxes: [:id, :title, :row, :col],
+                  edges: [:from, :to]).to_h
   end
 
   def metadata_params(json)
@@ -191,6 +227,7 @@ class WorkflowsController < ApplicationController
 
     flash.now[:alert] = message
     @launchers = Launcher.all(project_directory)
+    @workflow_overrides = @workflow.overrides_attributes
     render operation == :create ? :new : :edit
   end
 end
