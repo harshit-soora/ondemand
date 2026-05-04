@@ -57,8 +57,6 @@
                 </div>
               </div>
               <div class="col-auto">
-                <%# Only the Advanced button is shown on the right-hand side.
-                    Clicking it expands the override form rendered below. %>
                 <button class="btn btn-outline-secondary btn-sm"
                         type="button"
                         data-bs-toggle="collapse"
@@ -77,10 +75,6 @@
   </div>
 </div>
 
-<%# Collapsible Advanced overrides form, in its own partial.
-    The override widgets keep their native launcher[<id>] field names; the
-    workflows controller re-maps params[:launcher] into advanced_overrides
-    on save/update. %>
 <% if @workflow_overrides %>
   <div class="collapse" id="workflow_advanced_collapse">
     <%= render partial: 'advanced' %>
