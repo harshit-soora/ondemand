@@ -132,7 +132,7 @@ class Workflow
   def update_attrs(attributes, override = false)
     [:name, :description, :launcher_ids, :metadata, :sync_key_enabled, :advanced_overrides].each do |attribute|
       next unless override || attributes.key?(attribute)
-      instance_variable_set("@#{attribute}", attributes.fetch(attribute, ''))
+      instance_variable_set("@#{attribute}".to_sym, attributes.fetch(attribute, ''))
     end
   end
 
@@ -197,7 +197,6 @@ class Workflow
     end
     launcher_data["afterok"] = Array(dependent_jobs)
     launcher_data["ood_workflow_sync_key"] = sync_key if sync_key
-
     advanced_overrides.each do |key, value|
       next if value.blank?
       launcher_data[key.to_s] = value
