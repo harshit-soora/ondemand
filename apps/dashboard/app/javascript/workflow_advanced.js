@@ -54,7 +54,7 @@ function refreshAddButtonLabel() {
 
 // launcher_edit.js remove/edit click handler uses: $('.new_launcher').find('.editable-form-field')...
 // The workflow form has no `.new_launcher` thus Remove button does nothing.
-// Newly-added fields are unaffected because addInProgressField attache handlers.
+// Newly-added fields are unaffected because addInProgressField attach handlers.
 function wireExistingFieldHandlers() {
   const card = document.getElementById('workflow_advanced_card');
   if (!card) return;
